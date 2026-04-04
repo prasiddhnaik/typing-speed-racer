@@ -351,9 +351,188 @@ function MainMenu({ onStart, onLeaderboard, preset, setPreset }) {
   );
 }
 
+// ─── useLeaderboard ───────────────────────────────────────────────────────────
+function useLeaderboard() {
+  const KEY = "leaderboard-top10";
+  const [entries, setEntries] = useState([]);
+
+  const load = useCallback(async () => {
+    try {
+      const result = await window.storage.get(KEY);
+      setEntries(result ? JSON.parse(result.value) : []);
+    } catch {
+      setEntries([]); // key doesn't exist yet — first time
+    }
+  }, []);
+
+  const save = useCallback(async (newEntry) => {
+    let current = [];
+    try {
+      const result = await window.storage.get(KEY);
+      current = result ? JSON.parse(result.value) : [];
+    } catch { /* first save */ }
+
+    const updated = [...current, newEntry]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+    await window.storage.set(KEY, JSON.stringify(updated));
+    setEntries(updated);
+    return updated;
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { entries, save, reload: load };
+}
+
+// ─── GameOverScreen ───────────────────────────────────────────────────────────
+function GameOverScreen({ display, onSave, onMenu, onLeaderboard, leaderboardEntries }) {
+  const [name, setName] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [rank, setRank] = useState(null);
+
+  const acc = display.totalTyped === 0 ? 100
+    : Math.round((display.totalCorrect / display.totalTyped) * 100);
+  const elapsed = display.startTime
+    ? Math.floor((Date.now() - display.startTime) / 1000)
+    : 0;
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    const entry = {
+      name: name.trim().toUpperCase().slice(0, 3),
+      score: display.score,
+      wpm: display.wpm,
+      accuracy: acc,
+      streak: display.bestStreak,
+      date: new Date().toLocaleDateString(),
+    };
+    const updated = await onSave(entry);
+    const idx = updated.findIndex((e) => e.score === display.score && e.name === entry.name);
+    setRank(idx + 1);
+    setSaved(true);
+  };
+
+  const madeBoard = leaderboardEntries.length < 10
+    || display.score > (leaderboardEntries[leaderboardEntries.length - 1]?.score ?? 0);
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-5 text-white px-6">
+      <h2 className="text-4xl font-black text-red-400 font-mono tracking-wide">GAME OVER</h2>
+
+      <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
+        {[
+          ["Score",    display.score.toLocaleString()],
+          ["Peak WPM", display.wpm],
+          ["Accuracy", `${acc}%`],
+          ["Streak",   `${display.bestStreak} best`],
+          ["Level",    display.level],
+          ["Time",     `${minutes}:${seconds.toString().padStart(2,"0")}`],
+        ].map(([label, val]) => (
+          <div key={label} className="bg-gray-800 rounded-xl p-3 text-center">
+            <div className="text-gray-400 text-xs uppercase tracking-widest">{label}</div>
+            <div className="text-white font-bold font-mono text-xl mt-1">{val}</div>
+          </div>
+        ))}
+      </div>
+
+      {!saved && madeBoard && (
+        <div className="flex gap-2 items-center">
+          <input
+            maxLength={3}
+            value={name}
+            onChange={(e) => setName(e.target.value.toUpperCase())}
+            placeholder="AAA"
+            className="w-20 bg-gray-800 text-white font-mono text-2xl text-center rounded-lg px-3 py-2
+                       border border-indigo-500 focus:outline-none tracking-widest uppercase"
+          />
+          <button
+            onClick={handleSave}
+            disabled={!name.trim()}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold
+                       disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            Save Score
+          </button>
+        </div>
+      )}
+      {saved && rank && (
+        <p className="text-yellow-300 font-bold text-lg">
+          {rank === 1 ? "🏆 New #1!" : `#${rank} on the leaderboard!`}
+        </p>
+      )}
+
+      <div className="flex gap-3">
+        <button onClick={onMenu}
+          className="px-5 py-2 bg-gray-700 hover:bg-gray-600 rounded-xl font-bold transition-all">
+          Menu
+        </button>
+        <button onClick={onLeaderboard}
+          className="flex items-center gap-1 px-5 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-xl font-bold transition-all">
+          <Trophy size={16} />Leaderboard
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── LeaderboardView ──────────────────────────────────────────────────────────
+function LeaderboardView({ entries, onBack }) {
+  return (
+    <div className="flex flex-col h-full text-white">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-700">
+        <Trophy size={22} className="text-yellow-400" />
+        <h2 className="text-xl font-bold">Leaderboard</h2>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-2">
+        {entries.length === 0 ? (
+          <p className="text-gray-500 text-center mt-12">No scores yet. Play to get on the board!</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-gray-500 text-xs uppercase tracking-widest border-b border-gray-700">
+                <th className="py-2 text-left w-8">#</th>
+                <th className="py-2 text-left">Name</th>
+                <th className="py-2 text-right">Score</th>
+                <th className="py-2 text-right">WPM</th>
+                <th className="py-2 text-right">Acc</th>
+                <th className="py-2 text-right hidden sm:table-cell">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((e, i) => (
+                <tr key={i}
+                  className={`border-b border-gray-800 transition-colors
+                    ${i === 0 ? "text-yellow-300" : i === 1 ? "text-gray-300" : i === 2 ? "text-orange-400" : "text-gray-400"}`}
+                >
+                  <td className="py-2 font-mono font-bold">{i + 1}</td>
+                  <td className="py-2 font-mono font-bold tracking-widest">{e.name}</td>
+                  <td className="py-2 text-right font-mono">{e.score.toLocaleString()}</td>
+                  <td className="py-2 text-right">{e.wpm}</td>
+                  <td className="py-2 text-right">{e.accuracy}%</td>
+                  <td className="py-2 text-right hidden sm:table-cell text-xs">{e.date}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <div className="px-4 py-3 border-t border-gray-700">
+        <button onClick={onBack}
+          className="px-5 py-2 bg-gray-700 hover:bg-gray-600 rounded-xl font-bold transition-all">
+          ← Back
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Root Component (shell — game loop wired in Task 2) ───────────────────────
 export default function TypingSpeedRacer() {
   const [display, dispatch] = useReducer(displayReducer, initialDisplay);
+  const { entries: lbEntries, save: saveScore, reload: reloadLb } = useLeaderboard();
   const [preset, setPreset] = useState("normal");
   const [wordsToRender, setWordsToRender] = useState([]);
   const [inputVal, setInputVal] = useState("");
@@ -567,7 +746,7 @@ export default function TypingSpeedRacer() {
         {display.phase === "menu" && (
           <MainMenu
             onStart={handleStart}
-            onLeaderboard={() => dispatch({ type: "SHOW_LEADERBOARD" })}
+            onLeaderboard={() => { reloadLb(); dispatch({ type: "SHOW_LEADERBOARD" }); }}
             preset={preset}
             setPreset={setPreset}
           />
@@ -635,20 +814,19 @@ export default function TypingSpeedRacer() {
           </div>
         )}
         {display.phase === "leaderboard" && (
-          <div className="flex flex-col items-center justify-center h-full text-white gap-4">
-            <Trophy size={40} className="text-yellow-400" />
-            <p className="text-gray-400">Leaderboard — wired in Task 5</p>
-            <button onClick={() => dispatch({ type: "MAIN_MENU" })}
-              className="px-6 py-2 bg-gray-700 rounded-lg hover:bg-gray-600">Back</button>
-          </div>
+          <LeaderboardView
+            entries={lbEntries}
+            onBack={() => dispatch({ type: "MAIN_MENU" })}
+          />
         )}
         {display.phase === "gameover" && (
-          <div className="flex flex-col items-center justify-center h-full text-white gap-4">
-            <p className="text-3xl font-bold text-red-400">GAME OVER</p>
-            <p className="text-gray-400">Summary — wired in Task 5</p>
-            <button onClick={() => dispatch({ type: "MAIN_MENU" })}
-              className="px-6 py-2 bg-indigo-600 rounded-lg hover:bg-indigo-500">Main Menu</button>
-          </div>
+          <GameOverScreen
+            display={display}
+            onSave={saveScore}
+            onMenu={() => { dispatch({ type: "MAIN_MENU" }); reloadLb(); }}
+            onLeaderboard={() => dispatch({ type: "SHOW_LEADERBOARD" })}
+            leaderboardEntries={lbEntries}
+          />
         )}
       </div>
 
