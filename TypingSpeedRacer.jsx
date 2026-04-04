@@ -76,6 +76,8 @@ const initialDisplay = {
   phase: "menu", // "menu" | "playing" | "paused" | "gameover" | "leaderboard"
   gameMode: "solo", // "solo" | "2p"
   startTime: null,
+  p1Score: 0, p1Lives: LIVES,
+  p2Score: 0, p2Lives: LIVES,
 };
 
 function displayReducer(state, action) {
@@ -117,6 +119,22 @@ function displayReducer(state, action) {
       return { ...initialDisplay, phase: "menu" };
     case "SHOW_LEADERBOARD":
       return { ...state, phase: "leaderboard" };
+    case "P_WORD_COMPLETE": {
+      const scoreKey = action.player === "P1" ? "p1Score" : "p2Score";
+      return { ...state, [scoreKey]: state[scoreKey] + Math.round(action.wordLen * state.level) };
+    }
+    case "P_WORD_MISSED": {
+      const livesKey = action.player === "P1" ? "p1Lives" : "p2Lives";
+      const newLives = state[livesKey] - 1;
+      // Game over when both players have 0 lives
+      const p1Dead = action.player === "P1" ? newLives <= 0 : state.p1Lives <= 0;
+      const p2Dead = action.player === "P2" ? newLives <= 0 : state.p2Lives <= 0;
+      return {
+        ...state,
+        [livesKey]: newLives,
+        phase: (p1Dead && p2Dead) ? "gameover" : state.phase,
+      };
+    }
     default:
       return state;
   }
@@ -534,6 +552,102 @@ function LeaderboardView({ entries, onBack }) {
   );
 }
 
+// ─── TwoPlayerGame ────────────────────────────────────────────────────────────
+function TwoPlayerGame({ display, wordsToRender, onInput, p1Input, p2Input, p1Ref, p2Ref, winner }) {
+  return (
+    <div className="flex flex-col h-full">
+      {/* Score bar */}
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700 text-sm">
+        <span className="text-indigo-300 font-bold font-mono">P1: {display.p1Score ?? 0}</span>
+        <span className="text-gray-500 font-mono text-xs">Lv.{display.level} · Race</span>
+        <span className="text-purple-300 font-bold font-mono">P2: {display.p2Score ?? 0}</span>
+      </div>
+
+      {/* Play field */}
+      <div className="relative flex-1 bg-gray-950 overflow-hidden">
+        {/* Centre divider */}
+        <div className="absolute top-0 bottom-0 left-1/2 w-px bg-gray-700 opacity-30" />
+        {/* Deadline */}
+        <div style={{ top: DEADLINE_Y }}
+          className="absolute left-0 right-0 h-px bg-red-600 opacity-60 z-10" />
+
+        {wordsToRender.map((w) => (
+          <FallingWord
+            key={w.id}
+            id={w.id}
+            text={w.text}
+            x={w.x}
+            y={w.y}
+            typed={p1Input.length > 0 && w.text.startsWith(p1Input) ? p1Input
+                   : p2Input.length > 0 && w.text.startsWith(p2Input) ? p2Input
+                   : ""}
+            isActive={
+              (p1Input.length > 0 && w.text.startsWith(p1Input)) ||
+              (p2Input.length > 0 && w.text.startsWith(p2Input))
+            }
+          />
+        ))}
+
+        {/* Winner banner */}
+        {winner && (
+          <div className="absolute inset-0 bg-gray-950/85 flex items-center justify-center z-30">
+            <div className="text-center">
+              <p className="text-5xl font-black text-yellow-300 font-mono mb-2">
+                {winner} WINS!
+              </p>
+              <p className="text-gray-400 text-sm mt-2">
+                P1: {display.p1Score ?? 0} · P2: {display.p2Score ?? 0}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Lives + inputs */}
+      <div className="flex gap-2 px-3 py-3 bg-gray-800 border-t border-gray-700">
+        <div className="flex-1">
+          <div className="flex gap-1 mb-1 items-center">
+            {Array.from({ length: LIVES }).map((_, i) => (
+              <Heart key={i} size={12}
+                className={i < (display.p1Lives ?? LIVES) ? "text-red-500 fill-red-500" : "text-gray-600"} />
+            ))}
+            <span className="text-indigo-400 text-xs ml-1 font-bold">P1</span>
+          </div>
+          <input
+            ref={p1Ref}
+            value={p1Input}
+            onChange={(e) => onInput(e.target.value, "P1")}
+            placeholder="Player 1…"
+            className="w-full bg-gray-900 text-white font-mono text-base rounded-lg px-3 py-2
+                       border border-indigo-600 focus:outline-none focus:border-indigo-400
+                       focus:ring-1 focus:ring-indigo-400 placeholder-gray-600"
+            autoComplete="off" autoCorrect="off" spellCheck={false}
+          />
+        </div>
+        <div className="flex-1">
+          <div className="flex gap-1 mb-1 items-center justify-end">
+            <span className="text-purple-400 text-xs mr-1 font-bold">P2</span>
+            {Array.from({ length: LIVES }).map((_, i) => (
+              <Heart key={i} size={12}
+                className={i < (display.p2Lives ?? LIVES) ? "text-red-500 fill-red-500" : "text-gray-600"} />
+            ))}
+          </div>
+          <input
+            ref={p2Ref}
+            value={p2Input}
+            onChange={(e) => onInput(e.target.value, "P2")}
+            placeholder="Player 2…"
+            className="w-full bg-gray-900 text-white font-mono text-base rounded-lg px-3 py-2
+                       border border-purple-700 focus:outline-none focus:border-purple-500
+                       focus:ring-1 focus:ring-purple-500 placeholder-gray-600"
+            autoComplete="off" autoCorrect="off" spellCheck={false}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Root Component (shell — game loop wired in Task 2) ───────────────────────
 export default function TypingSpeedRacer() {
   const [display, dispatch] = useReducer(displayReducer, initialDisplay);
@@ -551,6 +665,11 @@ export default function TypingSpeedRacer() {
   const lastTimeRef  = useRef(null);
   const wordQueueRef = useRef([]);
   const inputRef     = useRef(null);
+  const [p1Input, setP1Input] = useState("");
+  const [p2Input, setP2Input] = useState("");
+  const p1Ref = useRef(null);
+  const p2Ref = useRef(null);
+  const [winner, setWinner] = useState(null);
   const displayRef   = useRef(display);
   useEffect(() => { displayRef.current = display; }, [display]);
   useEffect(() => { presetRef.current = preset; }, [preset]);
@@ -613,7 +732,13 @@ export default function TypingSpeedRacer() {
       if (!w.active) return false;
       w.y += w.speed * delta;
       if (w.y >= DEADLINE_Y) {
-        dispatch({ type: "WORD_MISSED" });
+        const mode = displayRef.current.gameMode;
+        if (mode === "2p") {
+          dispatch({ type: "P_WORD_MISSED", player: "P1" });
+          dispatch({ type: "P_WORD_MISSED", player: "P2" });
+        } else {
+          dispatch({ type: "WORD_MISSED" });
+        }
         return false;
       }
       return true;
@@ -672,6 +797,14 @@ export default function TypingSpeedRacer() {
     return () => window.removeEventListener("keydown", onKey);
   }, [dispatch]);
 
+  useEffect(() => {
+    if (display.phase === "gameover" && display.gameMode === "2p") {
+      if (display.p1Score > display.p2Score) setWinner("PLAYER 1");
+      else if (display.p2Score > display.p1Score) setWinner("PLAYER 2");
+      else setWinner("TIE");
+    }
+  }, [display.phase, display.gameMode, display.p1Score, display.p2Score]);
+
   const handleStart = useCallback((mode) => {
     wordQueueRef.current = [];
     gameStateRef.current = initGameState(presetRef.current);
@@ -682,6 +815,9 @@ export default function TypingSpeedRacer() {
     }
     setWordsToRender([]);
     setInputVal("");
+    setP1Input("");
+    setP2Input("");
+    setWinner(null);
     dispatch({ type: "START_GAME", mode });
   }, [dispatch]);
 
@@ -741,6 +877,42 @@ export default function TypingSpeedRacer() {
     }
   }, [dispatch]);
 
+  const handle2PInput = useCallback((val, player) => {
+    const raw = val;
+    const trimmed = raw.endsWith(" ") ? raw.trim() : raw;
+
+    if (!gameStateRef.current || displayRef.current.phase !== "playing") return;
+
+    const gs = gameStateRef.current;
+    const setInput = player === "P1" ? setP1Input : setP2Input;
+
+    if (!trimmed) {
+      gs.words.forEach((w) => { w.typed = ""; });
+      setInput("");
+      return;
+    }
+
+    const active = findActiveWord(gs.words, trimmed);
+    if (!active) {
+      setInput("");
+      return;
+    }
+
+    if (active.text.startsWith(trimmed)) {
+      active.typed = trimmed;
+      setInput(raw);
+    }
+
+    if (trimmed === active.text) {
+      active.active = false;
+      active.completedBy = player;
+      dispatch({ type: "P_WORD_COMPLETE", player, wordLen: active.text.length });
+      // Clear both players' inputs when word is snagged
+      setP1Input("");
+      setP2Input("");
+    }
+  }, [dispatch]);
+
   return (
     <div className="bg-gray-950 min-h-screen flex items-center justify-center p-4 font-sans">
       <div
@@ -757,66 +929,72 @@ export default function TypingSpeedRacer() {
           />
         )}
         {(display.phase === "playing" || display.phase === "paused") && (
-          <div className="flex flex-col h-full">
-            <HUD display={display} />
-            <div className="relative flex-1 bg-gray-950 overflow-hidden">
-              {/* Deadline line */}
-              <div
-                style={{ top: DEADLINE_Y }}
-                className="absolute left-0 right-0 h-px bg-red-600 opacity-60 z-10"
-              />
-              <div
-                style={{ top: DEADLINE_Y - 18 }}
-                className="absolute right-2 text-red-600 text-xs opacity-60 z-10 font-mono"
-              >
-                DEADLINE
-              </div>
-              {/* Falling words */}
-              {wordsToRender.map((w) => (
-                <FallingWord
-                  key={w.id}
-                  id={w.id}
-                  text={w.text}
-                  x={w.x}
-                  y={w.y}
-                  typed={w.typed}
-                  isActive={inputVal.length > 0 && w.text.startsWith(inputVal)}
-                />
-              ))}
-              {particles.map((p) => (
-                <ParticleBurst
-                  key={p.id}
-                  x={p.x}
-                  y={p.y}
-                  onDone={() => setParticles((prev) => prev.filter((x) => x.id !== p.id))}
-                />
-              ))}
-              {/* Pause overlay */}
-              {display.phase === "paused" && (
-                <div className="absolute inset-0 bg-gray-950/80 flex items-center justify-center z-20">
-                  <div className="text-center">
-                    <Pause size={48} className="text-indigo-400 mx-auto mb-3" />
-                    <p className="text-white text-2xl font-bold">PAUSED</p>
-                    <p className="text-gray-400 text-sm mt-1">Press Esc to resume</p>
-                  </div>
+          display.gameMode === "2p" ? (
+            <TwoPlayerGame
+              display={display}
+              wordsToRender={wordsToRender}
+              onInput={handle2PInput}
+              p1Input={p1Input}
+              p2Input={p2Input}
+              p1Ref={p1Ref}
+              p2Ref={p2Ref}
+              winner={display.phase === "gameover" ? winner : null}
+            />
+          ) : (
+            <div className="flex flex-col h-full">
+              <HUD display={display} />
+              <div className="relative flex-1 bg-gray-950 overflow-hidden">
+                <div style={{ top: DEADLINE_Y }}
+                  className="absolute left-0 right-0 h-px bg-red-600 opacity-60 z-10" />
+                <div style={{ top: DEADLINE_Y - 18 }}
+                  className="absolute right-2 text-red-600 text-xs opacity-60 z-10 font-mono">
+                  DEADLINE
                 </div>
-              )}
+                {wordsToRender.map((w) => (
+                  <FallingWord
+                    key={w.id}
+                    id={w.id}
+                    text={w.text}
+                    x={w.x}
+                    y={w.y}
+                    typed={w.typed}
+                    isActive={inputVal.length > 0 && w.text.startsWith(inputVal)}
+                  />
+                ))}
+                {particles.map((p) => (
+                  <ParticleBurst
+                    key={p.id}
+                    x={p.x}
+                    y={p.y}
+                    onDone={() => setParticles((prev) => prev.filter((x) => x.id !== p.id))}
+                  />
+                ))}
+                {display.phase === "paused" && (
+                  <div className="absolute inset-0 bg-gray-950/80 flex items-center justify-center z-20">
+                    <div className="text-center">
+                      <Pause size={48} className="text-indigo-400 mx-auto mb-3" />
+                      <p className="text-white text-2xl font-bold">PAUSED</p>
+                      <p className="text-gray-400 text-sm mt-1">Press Esc to resume</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="px-4 py-3 bg-gray-800 border-t border-gray-700">
+                <input
+                  ref={inputRef}
+                  value={inputVal}
+                  onChange={handleInput}
+                  className="w-full bg-gray-900 text-white font-mono text-lg rounded-lg px-4 py-2
+                             border border-gray-600 focus:outline-none focus:border-indigo-500
+                             focus:ring-1 focus:ring-indigo-500 placeholder-gray-600"
+                  placeholder="type here..."
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              </div>
             </div>
-            <div className="px-4 py-3 bg-gray-800 border-t border-gray-700">
-              <input
-                ref={inputRef}
-                value={inputVal}
-                onChange={handleInput}
-                className="w-full bg-gray-900 text-white font-mono text-lg rounded-lg px-4 py-2
-                           border border-gray-600 focus:outline-none focus:border-indigo-500
-                           focus:ring-1 focus:ring-indigo-500 placeholder-gray-600"
-                placeholder="type here..."
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-            </div>
-          </div>
+          )
         )}
         {display.phase === "leaderboard" && (
           <LeaderboardView
