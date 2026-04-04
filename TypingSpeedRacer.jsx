@@ -122,6 +122,18 @@ function displayReducer(state, action) {
   }
 }
 
+// ─── initGameState ────────────────────────────────────────────────────────────
+function initGameState(presetKey) {
+  return {
+    words: [],          // active word objects
+    nextId: 0,
+    spawnAccum: 0,      // ms accumulated since last spawn
+    levelAccum: 0,      // ms accumulated since last level-up
+    preset: DIFFICULTY_PRESETS[presetKey],
+    presetKey,
+  };
+}
+
 // ─── Pure Helpers ─────────────────────────────────────────────────────────────
 function shuffle(arr) {
   const a = [...arr];
@@ -297,17 +309,129 @@ export default function TypingSpeedRacer() {
   const [inputVal, setInputVal] = useState("");
   const [shake, setShake] = useState(false);
 
+  const presetRef = useRef("normal"); // tracks latest preset for rAF closure access
   const gameStateRef = useRef(null);
   const rafRef       = useRef(null);
   const lastTimeRef  = useRef(null);
   const wordQueueRef = useRef([]);
   const inputRef     = useRef(null);
-  const displayRef   = useRef(display); // mirror for rAF closure access
+  const displayRef   = useRef(display);
   useEffect(() => { displayRef.current = display; }, [display]);
+  useEffect(() => { presetRef.current = preset; }, [preset]);
+
+  // ── game loop ────────────────────────────────────────────────────────────────
+  const gameLoop = useCallback((timestamp) => {
+    if (!gameStateRef.current) return;
+    const gs = gameStateRef.current;
+
+    // delta time — cap at 100ms to avoid spiral of death on tab-switch
+    const delta = Math.min(timestamp - (lastTimeRef.current ?? timestamp), 100);
+    lastTimeRef.current = timestamp;
+
+    const phase = displayRef.current.phase;
+    if (phase === "paused") {
+      rafRef.current = requestAnimationFrame(gameLoop);
+      return;
+    }
+
+    // ── level progression ──────────────────────────────────────────────────
+    gs.levelAccum += delta;
+    if (gs.levelAccum >= LEVEL_INTERVAL_MS) {
+      gs.levelAccum -= LEVEL_INTERVAL_MS;
+      const newLevel = displayRef.current.level + 1;
+      dispatch({ type: "LEVEL_UP", level: newLevel });
+    }
+
+    const level  = displayRef.current.level;
+    const preset = gs.preset;
+
+    // ── spawn words ────────────────────────────────────────────────────────
+    const spawnInterval = getSpawnIntervalForLevel(preset, level);
+    gs.spawnAccum += delta;
+    while (gs.spawnAccum >= spawnInterval) {
+      gs.spawnAccum -= spawnInterval;
+      const text = pickWord(wordQueueRef);
+      const x = 60 + Math.random() * 540;
+      gs.words.push({
+        id: gs.nextId++,
+        text,
+        x,
+        y: -30,
+        speed: getSpeedForLevel(preset, level),
+        typed: "",
+        active: true,
+        completedBy: null,
+      });
+    }
+
+    // ── move words & check deadline ────────────────────────────────────────
+    gs.words = gs.words.filter((w) => {
+      if (!w.active) return false;
+      w.y += w.speed * delta;
+      if (w.y >= DEADLINE_Y) {
+        dispatch({ type: "WORD_MISSED" });
+        return false;
+      }
+      return true;
+    });
+
+    // ── WPM update ─────────────────────────────────────────────────────────
+    const startTime = displayRef.current.startTime;
+    if (startTime) {
+      const elapsedMin = (Date.now() - startTime) / 60000;
+      if (elapsedMin > 0) {
+        const wpm = Math.round((displayRef.current.totalCorrect / 5) / elapsedMin);
+        dispatch({ type: "UPDATE_WPM", wpm });
+      }
+    }
+
+    // ── push render snapshot ────────────────────────────────────────────────
+    // Create new word objects so React.memo on FallingWord can diff correctly
+    setWordsToRender(gs.words.map((w) => ({ ...w })));
+
+    // ── continue loop ───────────────────────────────────────────────────────
+    if (displayRef.current.phase !== "gameover") {
+      rafRef.current = requestAnimationFrame(gameLoop);
+    }
+  }, [dispatch]);
+
+  // ── start / stop loop on phase change ────────────────────────────────────
+  useEffect(() => {
+    if (display.phase === "playing" && !rafRef.current) {
+      rafRef.current = requestAnimationFrame(gameLoop);
+    }
+    if (display.phase === "gameover" || display.phase === "menu") {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    }
+  }, [display.phase, gameLoop]);
+
+  // ── Esc key → pause ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape" &&
+          (displayRef.current.phase === "playing" || displayRef.current.phase === "paused")) {
+        dispatch({ type: "PAUSE" });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dispatch]);
 
   const handleStart = useCallback((mode) => {
+    wordQueueRef.current = [];
+    gameStateRef.current = initGameState(presetRef.current);
+    lastTimeRef.current  = null;
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    setWordsToRender([]);
+    setInputVal("");
     dispatch({ type: "START_GAME", mode });
-  }, []);
+  }, [dispatch]);
 
   return (
     <div className="bg-gray-950 min-h-screen flex items-center justify-center p-4 font-sans">
