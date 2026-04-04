@@ -553,7 +553,7 @@ function LeaderboardView({ entries, onBack }) {
 }
 
 // ─── TwoPlayerGame ────────────────────────────────────────────────────────────
-function TwoPlayerGame({ display, wordsToRender, onInput, p1Input, p2Input, p1Ref, p2Ref, winner }) {
+function TwoPlayerGame({ display, wordsToRender, onInput, p1Input, p2Input, p1Ref, p2Ref, winner, onMenu }) {
   return (
     <div className="flex flex-col h-full">
       {/* Score bar */}
@@ -598,6 +598,12 @@ function TwoPlayerGame({ display, wordsToRender, onInput, p1Input, p2Input, p1Re
               <p className="text-gray-400 text-sm mt-2">
                 P1: {display.p1Score ?? 0} · P2: {display.p2Score ?? 0}
               </p>
+              <button
+                onClick={onMenu}
+                className="mt-6 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-white transition-all"
+              >
+                Back to Menu
+              </button>
             </div>
           </div>
         )}
@@ -928,7 +934,8 @@ export default function TypingSpeedRacer() {
             setPreset={setPreset}
           />
         )}
-        {(display.phase === "playing" || display.phase === "paused") && (
+        {(display.phase === "playing" || display.phase === "paused" ||
+          (display.phase === "gameover" && display.gameMode === "2p")) && (
           display.gameMode === "2p" ? (
             <TwoPlayerGame
               display={display}
@@ -938,7 +945,8 @@ export default function TypingSpeedRacer() {
               p2Input={p2Input}
               p1Ref={p1Ref}
               p2Ref={p2Ref}
-              winner={display.phase === "gameover" ? winner : null}
+              winner={winner}
+              onMenu={() => { dispatch({ type: "MAIN_MENU" }); }}
             />
           ) : (
             <div className="flex flex-col h-full">
@@ -1002,7 +1010,7 @@ export default function TypingSpeedRacer() {
             onBack={() => dispatch({ type: "MAIN_MENU" })}
           />
         )}
-        {display.phase === "gameover" && (
+        {display.phase === "gameover" && display.gameMode !== "2p" && (
           <GameOverScreen
             display={display}
             onSave={saveScore}
