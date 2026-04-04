@@ -491,17 +491,14 @@ export default function TypingSpeedRacer() {
 
     // Valid prefix — update typed progress
     if (active.text.startsWith(val)) {
+      const prevLen = active.typed.length;
       active.typed = val;
-      dispatch({ type: "KEYSTROKE_HIT" });
+      if (val.length > prevLen) {
+        // Net new character — count as hit
+        dispatch({ type: "KEYSTROKE_HIT" });
+      }
+      // If shorter (backspace), don't count — player made an error
       setInputVal(raw); // keep raw (with possible trailing space in flight)
-    } else {
-      // Shouldn't reach here given findActiveWord logic, but guard it
-      dispatch({ type: "KEYSTROKE_MISS" });
-      setShake(true);
-      setTimeout(() => setShake(false), 300);
-      setInputVal("");
-      words.forEach((w) => { w.typed = ""; });
-      return;
     }
 
     // Word complete?
