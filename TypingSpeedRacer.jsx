@@ -131,6 +131,7 @@ function initGameState(presetKey) {
     levelAccum: 0,      // ms accumulated since last level-up
     preset: DIFFICULTY_PRESETS[presetKey],
     presetKey,
+    pausedMs: 0,        // total milliseconds spent paused
   };
 }
 
@@ -309,7 +310,8 @@ export default function TypingSpeedRacer() {
   const [inputVal, setInputVal] = useState("");
   const [shake, setShake] = useState(false);
 
-  const presetRef = useRef("normal"); // tracks latest preset for rAF closure access
+  const presetRef   = useRef("normal"); // tracks latest preset for rAF closure access
+  const pausedAtRef = useRef(null);     // timestamp when current pause started
   const gameStateRef = useRef(null);
   const rafRef       = useRef(null);
   const lastTimeRef  = useRef(null);
@@ -330,8 +332,16 @@ export default function TypingSpeedRacer() {
 
     const phase = displayRef.current.phase;
     if (phase === "paused") {
+      if (pausedAtRef.current === null) {
+        pausedAtRef.current = timestamp; // record when pause started
+      }
       rafRef.current = requestAnimationFrame(gameLoop);
       return;
+    }
+    // If we just unpaused, accumulate paused duration
+    if (pausedAtRef.current !== null) {
+      gs.pausedMs += timestamp - pausedAtRef.current;
+      pausedAtRef.current = null;
     }
 
     // ── level progression ──────────────────────────────────────────────────
@@ -378,10 +388,12 @@ export default function TypingSpeedRacer() {
     // ── WPM update ─────────────────────────────────────────────────────────
     const startTime = displayRef.current.startTime;
     if (startTime) {
-      const elapsedMin = (Date.now() - startTime) / 60000;
+      const elapsedMin = (Date.now() - startTime - gs.pausedMs) / 60000;
       if (elapsedMin > 0) {
-        const wpm = Math.round((displayRef.current.totalCorrect / 5) / elapsedMin);
-        dispatch({ type: "UPDATE_WPM", wpm });
+        const newWpm = Math.round((displayRef.current.totalCorrect / 5) / elapsedMin);
+        if (newWpm !== displayRef.current.wpm) {
+          dispatch({ type: "UPDATE_WPM", wpm: newWpm });
+        }
       }
     }
 
@@ -406,6 +418,12 @@ export default function TypingSpeedRacer() {
         rafRef.current = null;
       }
     }
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
   }, [display.phase, gameLoop]);
 
   // ── Esc key → pause ───────────────────────────────────────────────────────
