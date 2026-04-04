@@ -176,6 +176,15 @@ function getStreakLabel(streak) {
   return null;
 }
 
+// Returns the word object that best matches the current input prefix.
+// Tie-break: lowest word (highest y value) wins — player clears the most dangerous one.
+function findActiveWord(words, input) {
+  if (!input) return null;
+  const matches = words.filter((w) => w.text.startsWith(input));
+  if (!matches.length) return null;
+  return matches.reduce((best, w) => (w.y > best.y ? w : best), matches[0]);
+}
+
 // ─── FallingWord ──────────────────────────────────────────────────────────────
 const FallingWord = memo(function FallingWord({ id, text, x, y, typed, isActive }) {
   const lenColor =
@@ -451,6 +460,60 @@ export default function TypingSpeedRacer() {
     dispatch({ type: "START_GAME", mode });
   }, [dispatch]);
 
+  const handleInput = useCallback((e) => {
+    const raw = e.target.value;
+    // Strip trailing space/enter — player can use space as submit gesture
+    const val = raw.endsWith(" ") ? raw.trim() : raw;
+
+    if (!gameStateRef.current || displayRef.current.phase !== "playing") return;
+
+    const words = gameStateRef.current.words;
+
+    if (!val) {
+      // Cleared input — reset typed progress on all words
+      words.forEach((w) => { w.typed = ""; });
+      setInputVal("");
+      return;
+    }
+
+    const active = findActiveWord(words, val);
+
+    if (!active) {
+      // No matching word — wrong input
+      dispatch({ type: "KEYSTROKE_MISS" });
+      setShake(true);
+      setTimeout(() => setShake(false), 300);
+      setInputVal("");
+      // Clear typed progress on all words
+      words.forEach((w) => { w.typed = ""; });
+      return;
+    }
+
+    // Valid prefix — update typed progress
+    if (active.text.startsWith(val)) {
+      active.typed = val;
+      dispatch({ type: "KEYSTROKE_HIT" });
+      setInputVal(raw); // keep raw (with possible trailing space in flight)
+    } else {
+      // Shouldn't reach here given findActiveWord logic, but guard it
+      dispatch({ type: "KEYSTROKE_MISS" });
+      setShake(true);
+      setTimeout(() => setShake(false), 300);
+      setInputVal("");
+      words.forEach((w) => { w.typed = ""; });
+      return;
+    }
+
+    // Word complete?
+    if (val === active.text) {
+      active.active = false;
+      active.completedBy = "P1";
+      dispatch({ type: "WORD_COMPLETE", wordLen: active.text.length });
+      setInputVal("");
+      words.forEach((w) => { if (w !== active) w.typed = ""; });
+    }
+  }, [dispatch]);
+
   return (
     <div className="bg-gray-950 min-h-screen flex items-center justify-center p-4 font-sans">
       <div
@@ -508,7 +571,7 @@ export default function TypingSpeedRacer() {
               <input
                 ref={inputRef}
                 value={inputVal}
-                onChange={(e) => setInputVal(e.target.value)}
+                onChange={handleInput}
                 className="w-full bg-gray-900 text-white font-mono text-lg rounded-lg px-4 py-2
                            border border-gray-600 focus:outline-none focus:border-indigo-500
                            focus:ring-1 focus:ring-indigo-500 placeholder-gray-600"
