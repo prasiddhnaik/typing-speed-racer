@@ -220,11 +220,17 @@ const FallingWord = memo(function FallingWord({ id, text, x, y, typed, isActive 
 });
 
 // ─── ParticleBurst ────────────────────────────────────────────────────────────
-const ParticleBurst = memo(function ParticleBurst({ x, y, id, onDone }) {
+const BURST_DURATION = 600; // ms — must match CSS animation duration
+
+const ParticleBurst = memo(function ParticleBurst({ x, y, onDone }) {
+  const onDoneRef = useRef(onDone);
+  useEffect(() => { onDoneRef.current = onDone; }); // keep ref current without restarts
+
   useEffect(() => {
-    const t = setTimeout(onDone, 600);
+    // Empty deps — fires once on mount, never restarted
+    const t = setTimeout(() => onDoneRef.current(), BURST_DURATION);
     return () => clearTimeout(t);
-  }, [onDone]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ position: "absolute", left: x, top: y, pointerEvents: "none" }}>
@@ -242,19 +248,13 @@ const ParticleBurst = memo(function ParticleBurst({ x, y, id, onDone }) {
               height: 6,
               borderRadius: "50%",
               background: color,
-              animation: `burst 0.6s ease-out forwards`,
+              animation: `burst ${BURST_DURATION}ms ease-out forwards`,
               "--dx": `${dx}px`,
               "--dy": `${dy}px`,
             }}
           />
         );
       })}
-      <style>{`
-        @keyframes burst {
-          0%   { transform: translate(0,0); opacity:1; }
-          100% { transform: translate(var(--dx),var(--dy)); opacity:0; }
-        }
-      `}</style>
     </div>
   );
 });
@@ -604,7 +604,6 @@ export default function TypingSpeedRacer() {
                   key={p.id}
                   x={p.x}
                   y={p.y}
-                  id={p.id}
                   onDone={() => setParticles((prev) => prev.filter((x) => x.id !== p.id))}
                 />
               ))}
@@ -661,6 +660,10 @@ export default function TypingSpeedRacer() {
           40%{transform:translateX(6px)}
           60%{transform:translateX(-4px)}
           80%{transform:translateX(4px)}
+        }
+        @keyframes burst {
+          0%   { transform: translate(0,0); opacity:1; }
+          100% { transform: translate(var(--dx),var(--dy)); opacity:0; }
         }
       `}</style>
     </div>
