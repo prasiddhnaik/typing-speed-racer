@@ -92,8 +92,6 @@ function displayReducer(state, action) {
         score: state.score + points,
         streak,
         bestStreak,
-        totalCorrect: state.totalCorrect + action.wordLen,
-        totalTyped: state.totalTyped + action.wordLen,
       };
     }
     case "WORD_MISSED":
@@ -166,28 +164,28 @@ function getStreakLabel(streak) {
 }
 
 // ─── FallingWord ──────────────────────────────────────────────────────────────
-const FallingWord = memo(function FallingWord({ word, isActive }) {
+const FallingWord = memo(function FallingWord({ id, text, x, y, typed, isActive }) {
   const lenColor =
-    word.text.length <= 4 ? "text-emerald-400" :
-    word.text.length <= 6 ? "text-yellow-300"  : "text-orange-400";
+    text.length <= 4 ? "text-emerald-400" :
+    text.length <= 6 ? "text-yellow-300"  : "text-orange-400";
 
   return (
     <div
       style={{
         position: "absolute",
-        left: word.x,
-        top: word.y,
+        left: x,
+        top: y,
         transform: "translateX(-50%)",
         willChange: "top",
       }}
       className={`font-mono text-lg font-bold select-none pointer-events-none
         ${isActive ? "filter drop-shadow-[0_0_10px_rgba(99,102,241,1)]" : ""}`}
     >
-      {word.text.split("").map((ch, i) => {
-        const typedLen = word.typed.length;
+      {text.split("").map((ch, i) => {
+        const typedLen = typed.length;
         let cls;
         if (i < typedLen) {
-          cls = word.typed[i] === ch ? "text-green-300" : "text-red-400";
+          cls = typed[i] === ch ? "text-green-300" : "text-red-400";
         } else if (i === typedLen && isActive) {
           cls = `${lenColor} underline`;
         } else {
@@ -343,7 +341,15 @@ export default function TypingSpeedRacer() {
               </div>
               {/* Falling words */}
               {wordsToRender.map((w) => (
-                <FallingWord key={w.id} word={w} isActive={false} />
+                <FallingWord
+                  key={w.id}
+                  id={w.id}
+                  text={w.text}
+                  x={w.x}
+                  y={w.y}
+                  typed={w.typed}
+                  isActive={inputVal.length > 0 && w.text.startsWith(inputVal)}
+                />
               ))}
               {/* Pause overlay */}
               {display.phase === "paused" && (
