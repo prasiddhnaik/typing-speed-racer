@@ -219,6 +219,46 @@ const FallingWord = memo(function FallingWord({ id, text, x, y, typed, isActive 
   );
 });
 
+// ─── ParticleBurst ────────────────────────────────────────────────────────────
+const ParticleBurst = memo(function ParticleBurst({ x, y, id, onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 600);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <div style={{ position: "absolute", left: x, top: y, pointerEvents: "none" }}>
+      {Array.from({ length: 8 }).map((_, i) => {
+        const angle = (i / 8) * 2 * Math.PI;
+        const dx = Math.cos(angle) * 30;
+        const dy = Math.sin(angle) * 30;
+        const color = ["#6366f1","#a78bfa","#34d399","#fbbf24"][i % 4];
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: color,
+              animation: `burst 0.6s ease-out forwards`,
+              "--dx": `${dx}px`,
+              "--dy": `${dy}px`,
+            }}
+          />
+        );
+      })}
+      <style>{`
+        @keyframes burst {
+          0%   { transform: translate(0,0); opacity:1; }
+          100% { transform: translate(var(--dx),var(--dy)); opacity:0; }
+        }
+      `}</style>
+    </div>
+  );
+});
+
 // ─── HUD ──────────────────────────────────────────────────────────────────────
 function HUD({ display }) {
   const acc = display.totalTyped === 0
@@ -318,6 +358,7 @@ export default function TypingSpeedRacer() {
   const [wordsToRender, setWordsToRender] = useState([]);
   const [inputVal, setInputVal] = useState("");
   const [shake, setShake] = useState(false);
+  const [particles, setParticles] = useState([]);
 
   const presetRef   = useRef("normal"); // tracks latest preset for rAF closure access
   const pausedAtRef = useRef(null);     // timestamp when current pause started
@@ -506,6 +547,11 @@ export default function TypingSpeedRacer() {
       active.active = false;
       active.completedBy = "P1";
       dispatch({ type: "WORD_COMPLETE", wordLen: active.text.length });
+      // Spawn particle burst at word's last known position
+      setParticles((prev) => [
+        ...prev,
+        { id: Date.now() + Math.random(), x: active.x, y: active.y },
+      ]);
       setInputVal("");
       words.forEach((w) => { if (w !== active) w.typed = ""; });
     }
@@ -551,6 +597,15 @@ export default function TypingSpeedRacer() {
                   y={w.y}
                   typed={w.typed}
                   isActive={inputVal.length > 0 && w.text.startsWith(inputVal)}
+                />
+              ))}
+              {particles.map((p) => (
+                <ParticleBurst
+                  key={p.id}
+                  x={p.x}
+                  y={p.y}
+                  id={p.id}
+                  onDone={() => setParticles((prev) => prev.filter((x) => x.id !== p.id))}
                 />
               ))}
               {/* Pause overlay */}
