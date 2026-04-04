@@ -375,8 +375,13 @@ function useLeaderboard() {
     const updated = [...current, newEntry]
       .sort((a, b) => b.score - a.score)
       .slice(0, 10);
-    await window.storage.set(KEY, JSON.stringify(updated));
-    setEntries(updated);
+    try {
+      await window.storage.set(KEY, JSON.stringify(updated));
+      setEntries(updated);
+    } catch {
+      // Storage write failed — still update local state so the session shows the score
+      setEntries(updated);
+    }
     return updated;
   }, []);
 
