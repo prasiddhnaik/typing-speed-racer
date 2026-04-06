@@ -889,6 +889,16 @@ export default function TypingSpeedRacer() {
 
     if (!gameStateRef.current || displayRef.current.phase !== "playing") return;
 
+    // Don't allow input from an eliminated player
+    const lives = player === "P1"
+      ? displayRef.current.p1Lives
+      : displayRef.current.p2Lives;
+    if (lives <= 0) {
+      const setInput = player === "P1" ? setP1Input : setP2Input;
+      setInput("");
+      return;
+    }
+
     const gs = gameStateRef.current;
     const setInput = player === "P1" ? setP1Input : setP2Input;
 
