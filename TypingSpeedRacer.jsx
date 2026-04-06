@@ -135,6 +135,16 @@ function displayReducer(state, action) {
         phase: (p1Dead && p2Dead) ? "gameover" : state.phase,
       };
     }
+    case "P_SHARED_MISS": {
+      const p1Lives = state.p1Lives - 1;
+      const p2Lives = state.p2Lives - 1;
+      return {
+        ...state,
+        p1Lives,
+        p2Lives,
+        phase: (p1Lives <= 0 && p2Lives <= 0) ? "gameover" : state.phase,
+      };
+    }
     default:
       return state;
   }
@@ -678,6 +688,7 @@ export default function TypingSpeedRacer() {
   const gameStateRef = useRef(null);
   const rafRef       = useRef(null);
   const lastTimeRef  = useRef(null);
+  const shouldRunRef = useRef(false);
   const wordQueueRef = useRef([]);
   const inputRef     = useRef(null);
   const [p1Input, setP1Input] = useState("");
@@ -691,6 +702,7 @@ export default function TypingSpeedRacer() {
 
   // ── game loop ────────────────────────────────────────────────────────────────
   const gameLoop = useCallback((timestamp) => {
+    if (!shouldRunRef.current) return;
     if (!gameStateRef.current) return;
     const gs = gameStateRef.current;
 
@@ -755,8 +767,7 @@ export default function TypingSpeedRacer() {
       if (w.y >= DEADLINE_Y) {
         const mode = displayRef.current.gameMode;
         if (mode === "2p") {
-          dispatch({ type: "P_WORD_MISSED", player: "P1" });
-          dispatch({ type: "P_WORD_MISSED", player: "P2" });
+          dispatch({ type: "P_SHARED_MISS" });
         } else {
           dispatch({ type: "WORD_MISSED" });
         }
@@ -793,12 +804,14 @@ export default function TypingSpeedRacer() {
       rafRef.current = requestAnimationFrame(gameLoop);
     }
     if (display.phase === "gameover" || display.phase === "menu") {
+      shouldRunRef.current = false;
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
     }
     return () => {
+      shouldRunRef.current = false;
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
@@ -843,6 +856,7 @@ export default function TypingSpeedRacer() {
     wordQueueRef.current = {};
     gameStateRef.current = initGameState(presetRef.current);
     lastTimeRef.current  = null;
+    shouldRunRef.current = true;
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
