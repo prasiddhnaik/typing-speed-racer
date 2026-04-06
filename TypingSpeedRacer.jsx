@@ -163,16 +163,25 @@ function shuffle(arr) {
   return a;
 }
 
-// Returns a word text given current level (1-10+).
 // Level 1-3: easy only. Level 4-6: easy+medium. Level 7+: all tiers.
-function pickWord(wordQueue) {
-  if (wordQueue.current.length === 0) {
-    // refill — shuffle all tiers together so pool never runs dry
-    wordQueue.current = shuffle([
-      ...WORD_POOL.easy, ...WORD_POOL.medium, ...WORD_POOL.hard
-    ]);
+function pickWord(wordQueue, level) {
+  let tierKey;
+  let pool;
+  if (level <= 3) {
+    tierKey = "easy";
+    pool = WORD_POOL.easy;
+  } else if (level <= 6) {
+    tierKey = "medium";
+    pool = [...WORD_POOL.easy, ...WORD_POOL.medium];
+  } else {
+    tierKey = "hard";
+    pool = [...WORD_POOL.easy, ...WORD_POOL.medium, ...WORD_POOL.hard];
   }
-  return wordQueue.current.pop();
+
+  if (!wordQueue.current[tierKey] || wordQueue.current[tierKey].length === 0) {
+    wordQueue.current[tierKey] = shuffle(pool);
+  }
+  return wordQueue.current[tierKey].pop();
 }
 
 function getSpeedForLevel(preset, level) {
@@ -719,8 +728,14 @@ export default function TypingSpeedRacer() {
     gs.spawnAccum += delta;
     while (gs.spawnAccum >= spawnInterval) {
       gs.spawnAccum -= spawnInterval;
-      const text = pickWord(wordQueueRef);
-      const x = 60 + Math.random() * 540;
+      const text = pickWord(wordQueueRef, level);
+      // Pick x far from existing words to avoid overlap
+      const existingXs = gs.words.map((w) => w.x);
+      let x, attempts = 0;
+      do {
+        x = 60 + Math.random() * 540;
+        attempts++;
+      } while (attempts < 20 && existingXs.some((ex) => Math.abs(ex - x) < 80));
       gs.words.push({
         id: gs.nextId++,
         text,
@@ -804,6 +819,19 @@ export default function TypingSpeedRacer() {
   }, [dispatch]);
 
   useEffect(() => {
+    if (display.phase === "playing") {
+      const t = setTimeout(() => {
+        if (display.gameMode === "2p") {
+          p1Ref.current?.focus();
+        } else {
+          inputRef.current?.focus();
+        }
+      }, 50);
+      return () => clearTimeout(t);
+    }
+  }, [display.phase, display.gameMode]);
+
+  useEffect(() => {
     if (display.phase === "gameover" && display.gameMode === "2p") {
       if (display.p1Score > display.p2Score) setWinner("PLAYER 1");
       else if (display.p2Score > display.p1Score) setWinner("PLAYER 2");
@@ -812,7 +840,7 @@ export default function TypingSpeedRacer() {
   }, [display.phase, display.gameMode, display.p1Score, display.p2Score]);
 
   const handleStart = useCallback((mode) => {
-    wordQueueRef.current = [];
+    wordQueueRef.current = {};
     gameStateRef.current = initGameState(presetRef.current);
     lastTimeRef.current  = null;
     if (rafRef.current) {
