@@ -1,5 +1,7 @@
 # Typing Speed Racer
 
+**Live demo:** https://typing-speed-racer-indol.vercel.app/
+
 A falling-words typing speed game built with React + Vite. Words fall from the top of the screen — type them before they hit the deadline line or lose a life.
 
 ## Features
