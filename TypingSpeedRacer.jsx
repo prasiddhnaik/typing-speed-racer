@@ -477,10 +477,10 @@ function MainMenu({ onStart, onStart2p, onLeaderboard, preset, setPreset }) {
       </div>
 
       {/* Action buttons */}
-      <div className="relative flex flex-col gap-3 w-56">
+      <div className="relative flex flex-col gap-3 w-[40vw] min-w-[180px] max-w-xs sm:max-w-sm">
         <button
           onClick={() => onStart("solo")}
-          className="group flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl font-bold text-base
+          className="group flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl font-bold text-sm sm:text-base
                      transition-all duration-200 active:scale-95
                      hover:scale-[1.03] hover:brightness-110"
           style={{ background: "linear-gradient(135deg, #4f46e5, #6d28d9)", boxShadow: "0 8px 32px rgba(79,70,229,0.4), inset 0 1px 0 rgba(255,255,255,0.1)" }}
@@ -490,7 +490,7 @@ function MainMenu({ onStart, onStart2p, onLeaderboard, preset, setPreset }) {
         </button>
         <button
           onClick={() => onStart2p()}
-          className="group flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl font-bold text-base
+          className="group flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl font-bold text-sm sm:text-base
                      transition-all duration-200 active:scale-95 hover:scale-[1.03] hover:brightness-110"
           style={{ background: "linear-gradient(135deg, #7c3aed, #9333ea)", boxShadow: "0 8px 24px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.08)" }}
         >
@@ -499,7 +499,7 @@ function MainMenu({ onStart, onStart2p, onLeaderboard, preset, setPreset }) {
         </button>
         <button
           onClick={onLeaderboard}
-          className="group flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl font-bold text-base
+          className="group flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl font-bold text-sm sm:text-base
                      bg-gray-800/80 border border-gray-700/60 text-gray-300 hover:text-white
                      hover:bg-gray-700/80 hover:border-gray-600 hover:scale-[1.02]
                      transition-all duration-200 active:scale-95"
