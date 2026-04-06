@@ -99,17 +99,24 @@ const DIFFICULTY_PRESETS = {
 const initialDisplay = {
   score: 0, lives: LIVES, level: 1, wpm: 0, accuracy: 100,
   streak: 0, bestStreak: 0, totalTyped: 0, totalCorrect: 0,
-  phase: "menu", // "menu" | "playing" | "paused" | "gameover" | "leaderboard"
+  phase: "menu", // "menu" | "2p-lobby" | "playing" | "paused" | "gameover" | "leaderboard"
   gameMode: "solo", // "solo" | "2p"
   startTime: null,
   p1Score: 0, p1Lives: LIVES,
   p2Score: 0, p2Lives: LIVES,
+  p1Ready: false, p2Ready: false, // 2P lobby ready state
 };
 
 function displayReducer(state, action) {
   switch (action.type) {
     case "START_GAME":
       return { ...initialDisplay, phase: "playing", gameMode: action.mode, startTime: Date.now() };
+    case "OPEN_2P_LOBBY":
+      return { ...initialDisplay, phase: "2p-lobby", gameMode: "2p" };
+    case "P1_READY":
+      return { ...state, p1Ready: true };
+    case "P2_READY":
+      return { ...state, p2Ready: true };
     case "WORD_COMPLETE": {
       // Score = wordLength × level × streakMultiplier
       // Note: totalCorrect/totalTyped are NOT updated here — KEYSTROKE_HIT handles
@@ -409,7 +416,7 @@ function HUD({ display }) {
 }
 
 // ─── MainMenu ─────────────────────────────────────────────────────────────────
-function MainMenu({ onStart, onLeaderboard, preset, setPreset }) {
+function MainMenu({ onStart, onStart2p, onLeaderboard, preset, setPreset }) {
   const difficultyMeta = {
     chill:    { color: "emerald", desc: "Relaxed pace" },
     normal:   { color: "indigo",  desc: "Balanced challenge" },
@@ -482,7 +489,7 @@ function MainMenu({ onStart, onLeaderboard, preset, setPreset }) {
           Solo Run
         </button>
         <button
-          onClick={() => onStart("2p")}
+          onClick={() => onStart2p()}
           className="group flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl font-bold text-base
                      transition-all duration-200 active:scale-95 hover:scale-[1.03] hover:brightness-110"
           style={{ background: "linear-gradient(135deg, #7c3aed, #9333ea)", boxShadow: "0 8px 24px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.08)" }}
@@ -792,6 +799,84 @@ function LeaderboardView({ entries, onBack }) {
   );
 }
 
+// ─── TwoPlayerLobby ──────────────────────────────────────────────────────────
+// Shown before a 2P game starts. Each player clicks their own Ready button.
+// Game only launches once both have confirmed — prevents one person starting
+// a game before the second player is seated and ready.
+function TwoPlayerLobby({ p1Ready, p2Ready, onP1Ready, onP2Ready }) {
+  const bothReady = p1Ready && p2Ready;
+
+  return (
+    <div className="relative flex flex-col items-center justify-center h-full gap-10 text-white overflow-hidden">
+      {/* Background glows */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-1/3 left-1/4 w-[300px] h-[200px] rounded-full bg-indigo-600/10 blur-[60px]" />
+        <div className="absolute top-1/3 right-1/4 w-[300px] h-[200px] rounded-full bg-purple-600/10 blur-[60px]" />
+      </div>
+
+      <div className="relative text-center">
+        <div className="text-xs font-mono tracking-[0.4em] text-gray-500 uppercase mb-3">2 Player Mode</div>
+        <h2 className="text-5xl font-black font-mono tracking-tight"
+          style={{ background: "linear-gradient(135deg, #818cf8, #a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+          GET READY
+        </h2>
+        <p className="text-gray-500 mt-3 text-sm font-mono tracking-widest">Each player press your Ready button</p>
+      </div>
+
+      <div className="relative flex gap-8">
+        {/* P1 */}
+        <button
+          onClick={onP1Ready}
+          disabled={p1Ready}
+          className="flex flex-col items-center gap-4 w-44 py-8 px-6 rounded-2xl border transition-all duration-200"
+          style={p1Ready
+            ? { background: "rgba(99,102,241,0.15)", borderColor: "rgba(99,102,241,0.6)", boxShadow: "0 0 40px rgba(99,102,241,0.25)" }
+            : { background: "rgba(99,102,241,0.05)", borderColor: "rgba(99,102,241,0.2)", cursor: "pointer" }}
+        >
+          <span className="text-2xl font-black font-mono tracking-widest text-indigo-300">P1</span>
+          <span className="text-4xl">{p1Ready ? "✓" : "?"}</span>
+          <span className={`text-sm font-bold font-mono tracking-wide ${p1Ready ? "text-indigo-400" : "text-gray-500"}`}>
+            {p1Ready ? "READY" : "Click to Ready"}
+          </span>
+        </button>
+
+        {/* Divider */}
+        <div className="flex items-center">
+          <div className="w-px h-24 bg-gradient-to-b from-transparent via-gray-700 to-transparent" />
+        </div>
+
+        {/* P2 */}
+        <button
+          onClick={onP2Ready}
+          disabled={p2Ready}
+          className="flex flex-col items-center gap-4 w-44 py-8 px-6 rounded-2xl border transition-all duration-200"
+          style={p2Ready
+            ? { background: "rgba(168,85,247,0.15)", borderColor: "rgba(168,85,247,0.6)", boxShadow: "0 0 40px rgba(168,85,247,0.25)" }
+            : { background: "rgba(168,85,247,0.05)", borderColor: "rgba(168,85,247,0.2)", cursor: "pointer" }}
+        >
+          <span className="text-2xl font-black font-mono tracking-widest text-purple-300">P2</span>
+          <span className="text-4xl">{p2Ready ? "✓" : "?"}</span>
+          <span className={`text-sm font-bold font-mono tracking-wide ${p2Ready ? "text-purple-400" : "text-gray-500"}`}>
+            {p2Ready ? "READY" : "Click to Ready"}
+          </span>
+        </button>
+      </div>
+
+      {bothReady && (
+        <div className="relative text-center animate-pulse">
+          <p className="text-green-400 font-black font-mono text-xl tracking-widest">Both ready — starting!</p>
+        </div>
+      )}
+
+      {!bothReady && (
+        <p className="relative text-gray-700 text-xs font-mono">
+          Waiting for {!p1Ready && !p2Ready ? "both players" : !p1Ready ? "Player 1" : "Player 2"}…
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── TwoPlayerGame ────────────────────────────────────────────────────────────
 function TwoPlayerGame({ display, wordsToRender, onInput, p1Input, p2Input, p1Ref, p2Ref, winner, onMenu }) {
   return (
@@ -1078,7 +1163,7 @@ export default function TypingSpeedRacer() {
       const phase = displayRef.current.phase;
       if (phase === "playing" || phase === "paused") {
         dispatch({ type: "PAUSE" });
-      } else if (phase === "gameover" || phase === "leaderboard") {
+      } else if (phase === "gameover" || phase === "leaderboard" || phase === "2p-lobby") {
         dispatch({ type: "MAIN_MENU" });
       }
     };
@@ -1106,6 +1191,15 @@ export default function TypingSpeedRacer() {
       else setWinner("TIE");
     }
   }, [display.phase, display.gameMode, display.p1Score, display.p2Score]);
+
+  // When both players ready up in the lobby, start the game after a short delay
+  // so the "Both ready — starting!" message is visible briefly.
+  useEffect(() => {
+    if (display.phase === "2p-lobby" && display.p1Ready && display.p2Ready) {
+      const t = setTimeout(() => handleStart("2p"), 800);
+      return () => clearTimeout(t);
+    }
+  }, [display.phase, display.p1Ready, display.p2Ready, handleStart]);
 
   const handleStart = useCallback((mode) => {
     wordQueueRef.current = {};
@@ -1242,9 +1336,18 @@ export default function TypingSpeedRacer() {
         {display.phase === "menu" && (
           <MainMenu
             onStart={handleStart}
+            onStart2p={() => dispatch({ type: "OPEN_2P_LOBBY" })}
             onLeaderboard={() => { reloadLb(); dispatch({ type: "SHOW_LEADERBOARD" }); }}
             preset={preset}
             setPreset={setPreset}
+          />
+        )}
+        {display.phase === "2p-lobby" && (
+          <TwoPlayerLobby
+            p1Ready={display.p1Ready}
+            p2Ready={display.p2Ready}
+            onP1Ready={() => dispatch({ type: "P1_READY" })}
+            onP2Ready={() => dispatch({ type: "P2_READY" })}
           />
         )}
         {(display.phase === "playing" || display.phase === "paused" ||
