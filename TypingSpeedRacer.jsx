@@ -1192,15 +1192,6 @@ export default function TypingSpeedRacer() {
     }
   }, [display.phase, display.gameMode, display.p1Score, display.p2Score]);
 
-  // When both players ready up in the lobby, start the game after a short delay
-  // so the "Both ready — starting!" message is visible briefly.
-  useEffect(() => {
-    if (display.phase === "2p-lobby" && display.p1Ready && display.p2Ready) {
-      const t = setTimeout(() => handleStart("2p"), 800);
-      return () => clearTimeout(t);
-    }
-  }, [display.phase, display.p1Ready, display.p2Ready, handleStart]);
-
   const handleStart = useCallback((mode) => {
     wordQueueRef.current = {};
     gameStateRef.current = initGameState(presetRef.current);
@@ -1216,6 +1207,15 @@ export default function TypingSpeedRacer() {
     setWinner(null);
     dispatch({ type: "START_GAME", mode });
   }, [dispatch]);
+
+  // When both players ready up in the lobby, start the game after a short delay
+  // so the "Both ready — starting!" message is visible briefly.
+  useEffect(() => {
+    if (display.phase === "2p-lobby" && display.p1Ready && display.p2Ready) {
+      const t = setTimeout(() => handleStart("2p"), 800);
+      return () => clearTimeout(t);
+    }
+  }, [display.phase, display.p1Ready, display.p2Ready, handleStart]);
 
   // handleInput — called on every keystroke in solo mode.
   // Prefix-matching approach: the player types freely; we find whichever falling
