@@ -80,7 +80,7 @@ const WORD_POOL = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GAME_HEIGHT = 500;   // px, play field height
-const DEADLINE_Y  = 440;   // px from top — words below this are lost
+const DEADLINE_Y  = 470;   // px from top — words below this are lost
 const LIVES       = 3;
 const LEVEL_INTERVAL_MS = 30_000; // level up every 30s
 const MIN_SPAWN_INTERVAL = 600;   // ms, floor
